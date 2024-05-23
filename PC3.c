@@ -16,7 +16,6 @@
 #define TAILLE_ADRESSE_SOURCE 1
 #define TAILLE_ADRESSE_DESTINATAIRE 1
 #define TAILLE_MESSAGE 250
-// 1 = message, 0 = token
 #define ADRESSE "3"
 #define FILTER "%1s%1s%1s%250[^\n]"
 
@@ -29,27 +28,51 @@ typedef struct paquet
 } Paquet;
 
 
+// Fonction de traitement des paquet reçus
 void traiter_trame(Paquet* paquet, SList* Lmessages) {
-
-	// printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+	// Affichage de Debug
+	printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 	printf("Paquet reçu\n");
 
-	if (!strcmp(paquet->etat_trame, "1")) {
+	// Si le paquet est un message de broadcast
+	if (!strcmp(paquet->etat_trame, "2")) {
+		// Si nous sommes l'auteur de ce message, on l'arrete en remettant l'etat trame à 0
 		if (!strcmp(paquet->destinataire, ADRESSE)) {
-			printf("Message received by %s from %s : %s \n", ADRESSE, paquet->source, paquet->message);
+			printf("Message de broadcast reçu par tout l'anneau\n");
 			strcpy(paquet->etat_trame, "0");
-			// on retourne l'accuse de reception correspondant au paquet_recu.
 		}
-	} else {
-		if (GetFirstElement(Lmessages)) { // si on veut envoyer un message.
-			if (!strcmp(paquet->source, ADRESSE)) { // si on est le dernier à avoir renvoyer un message, on attend encore un tour.
+		// Sinon on le lit et on le laisse passer sans modification
+		else {
+			printf("Message de broadcast reçu par %s de %s : %s \n", ADRESSE, paquet->source, paquet->message);
+		}
+	}
+	// Si le paquet est un message
+	else if (!strcmp(paquet->etat_trame, "1")) {
+		// Si le paquet nous est destiné on l'affiche et on change l'etat trame à 0 (token)
+		if (!strcmp(paquet->destinataire, ADRESSE)) {
+			printf("Message reçu par %s de %s : %s \n", ADRESSE, paquet->source, paquet->message);
+			strcpy(paquet->etat_trame, "0");
+		}
+	}
+	// Si le paquet est un token
+	else {
+		// Si on souhaite envoyer un message.
+		if (GetFirstElement(Lmessages)) {
+			// si on est le dernier à avoir envoyer un message, on attend un tour pour ne pas monopoliser le réseau et on change la source 0
+			if (!strcmp(paquet->source, ADRESSE)) {
 				strcpy(paquet->source, "0");
-			} else {
+			}
+			// Si on peut envoyer un message, on récupère le premier élément de la file, et on modifie notre paquet (destinataire et contenu)
+			else {
 				SCell* cell = GetFirstElement(Lmessages);
 				Message* nouveau_message = GetData(cell);
 				DeleteCell(Lmessages, cell);
 				
-				strcpy(paquet->etat_trame, "1");
+				if (!strcmp(nouveau_message->destinataire, ADRESSE)) {
+					strcpy(paquet->etat_trame, "2");
+				} else {
+					strcpy(paquet->etat_trame, "1");
+				}
 				strcpy(paquet->source, ADRESSE);
 				strcpy(paquet->destinataire, nouveau_message->destinataire);
 				strcpy(paquet->message, nouveau_message->contenu);
@@ -77,9 +100,9 @@ int main() {
 
     Message* message = (Message*) malloc(sizeof(Message));
 	strcpy(message->destinataire, "1");
-	strcpy(message->contenu, "Message 1 de PC 3 déstiné à PC 1");
+	strcpy(message->contenu, "Message 1 de PC 3 destiné à PC 1");
 
-	AddElementBegin(Lmessages, message);
+	AddElementEnd(Lmessages, message);
 
 
 	sock_S = socket(PF_INET, SOCK_DGRAM, 0);

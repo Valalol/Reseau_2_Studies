@@ -14,7 +14,7 @@
 #define UDP_port_OUT 8001
 #define IP_addr_S "127.0.0.1"
 #define TAILLE_ETAT_TRAME 1
-// 1 = message, 0 = token
+// 0 = token, 1 = message, 2 broadcast
 #define TAILLE_ADRESSE_SOURCE 1
 #define TAILLE_ADRESSE_DESTINATAIRE 1
 #define TAILLE_MESSAGE 250
@@ -34,18 +34,29 @@ typedef struct paquet
 // Fonction de traitement des paquet reçus
 void traiter_trame(Paquet* paquet, SList* Lmessages) {
 	// Affichage de Debug
-	// printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+	printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 	printf("Paquet reçu\n");
 
+	// Si le paquet est un message de broadcast
+	if (!strcmp(paquet->etat_trame, "2")) {
+		// Si nous sommes l'auteur de ce message, on l'arrete en remettant l'etat trame à 0
+		if (!strcmp(paquet->destinataire, ADRESSE)) {
+			printf("Message de broadcast reçu par tout l'anneau\n");
+			strcpy(paquet->etat_trame, "0");
+		}
+		// Sinon on le lit et on le laisse passer sans modification
+		else {
+			printf("Message de broadcast reçu par %s de %s : %s \n", ADRESSE, paquet->source, paquet->message);
+		}
+	}
 	// Si le paquet est un message
-	if (!strcmp(paquet->etat_trame, "1")) {
+	else if (!strcmp(paquet->etat_trame, "1")) {
 		// Si le paquet nous est destiné on l'affiche et on change l'etat trame à 0 (token)
 		if (!strcmp(paquet->destinataire, ADRESSE)) {
-			printf("Message received by %s from %s : %s \n", ADRESSE, paquet->source, paquet->message);
+			printf("Message reçu par %s de %s : %s \n", ADRESSE, paquet->source, paquet->message);
 			strcpy(paquet->etat_trame, "0");
-			// on retourne l'accuse de reception correspondant au paquet_recu.
 		}
-	} 
+	}
 	// Si le paquet est un token
 	else {
 		// Si on souhaite envoyer un message.
@@ -60,7 +71,11 @@ void traiter_trame(Paquet* paquet, SList* Lmessages) {
 				Message* nouveau_message = GetData(cell);
 				DeleteCell(Lmessages, cell);
 				
-				strcpy(paquet->etat_trame, "1");
+				if (!strcmp(nouveau_message->destinataire, ADRESSE)) {
+					strcpy(paquet->etat_trame, "2");
+				} else {
+					strcpy(paquet->etat_trame, "1");
+				}
 				strcpy(paquet->source, ADRESSE);
 				strcpy(paquet->destinataire, nouveau_message->destinataire);
 				strcpy(paquet->message, nouveau_message->contenu);
@@ -90,15 +105,21 @@ int main() {
 
     Message* message = (Message*) malloc(sizeof(Message));
 	strcpy(message->destinataire, "3");
-	strcpy(message->contenu, "Message 1 de PC 1 déstiné à PC 3");
+	strcpy(message->contenu, "Message 1 de PC 1 destiné à PC 3");
 
-	AddElementBegin(Lmessages, message);
+	AddElementEnd(Lmessages, message);
 
 	message = (Message*) malloc(sizeof(Message));
 	strcpy(message->destinataire, "2");
-	strcpy(message->contenu, "Message 2 de PC 1 déstiné à PC 2");
+	strcpy(message->contenu, "Message 2 de PC 1 destiné à PC 2");
 
-	AddElementBegin(Lmessages, message);
+	AddElementEnd(Lmessages, message);
+
+	message = (Message*) malloc(sizeof(Message));
+	strcpy(message->destinataire, "1");
+	strcpy(message->contenu, "Message 3 de PC 1 destiné à tous les PC");
+
+	AddElementEnd(Lmessages, message);
 
 
 	// On met à jour les Sockets
