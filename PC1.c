@@ -6,19 +6,22 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+// On importe Liste.h pour pouvoir créer une file de messages à envoyer
 #include "Liste.h"
 
-
+// On définit les ports d'entrée et de sortie ainsi que les tailles des différentes parties du paquet
 #define UDP_port_IN 8000
 #define UDP_port_OUT 8001
 #define IP_addr_S "127.0.0.1"
 #define TAILLE_ETAT_TRAME 1
+// 1 = message, 0 = token
 #define TAILLE_ADRESSE_SOURCE 1
 #define TAILLE_ADRESSE_DESTINATAIRE 1
 #define TAILLE_MESSAGE 250
-// 1 = message, 0 = token
 #define ADRESSE "1"
+#define FILTER "%1s%1s%1s%250[^\n]"
 
+// On définit la structure de notre paquet
 typedef struct paquet
 {
 	char etat_trame[TAILLE_ETAT_TRAME+1];
@@ -28,22 +31,31 @@ typedef struct paquet
 } Paquet;
 
 
+// Fonction de traitement des paquet reçus
 void traiter_trame(Paquet* paquet, SList* Lmessages) {
-
+	// Affichage de Debug
 	// printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 	printf("Paquet reçu\n");
 
+	// Si le paquet est un message
 	if (!strcmp(paquet->etat_trame, "1")) {
+		// Si le paquet nous est destiné on l'affiche et on change l'etat trame à 0 (token)
 		if (!strcmp(paquet->destinataire, ADRESSE)) {
 			printf("Message received by %s from %s : %s \n", ADRESSE, paquet->source, paquet->message);
 			strcpy(paquet->etat_trame, "0");
 			// on retourne l'accuse de reception correspondant au paquet_recu.
 		}
-	} else {
-		if (GetFirstElement(Lmessages)) { // si on veut envoyer un message.
-			if (!strcmp(paquet->source, ADRESSE)) { // si on est le dernier à avoir renvoyer un message, on attend encore un tour.
+	} 
+	// Si le paquet est un token
+	else {
+		// Si on souhaite envoyer un message.
+		if (GetFirstElement(Lmessages)) {
+			// si on est le dernier à avoir envoyer un message, on attend un tour pour ne pas monopoliser le réseau et on change la source 0
+			if (!strcmp(paquet->source, ADRESSE)) {
 				strcpy(paquet->source, "0");
-			} else {
+			}
+			// Si on peut envoyer un message, on récupère le premier élément de la file, et on modifie notre paquet (destinataire et contenu)
+			else {
 				SCell* cell = GetFirstElement(Lmessages);
 				Message* nouveau_message = GetData(cell);
 				DeleteCell(Lmessages, cell);
@@ -61,19 +73,19 @@ void traiter_trame(Paquet* paquet, SList* Lmessages) {
 }
 
 int main() {
-	char filter[] = "%1s%1s%1s%250[^\n]";
-
+	// On crée nos sockets
 	int sock_S, sock_C;
 
 	struct sockaddr_in sa_S, sa_C;
-	
+
 	unsigned int taille_sa = sizeof( struct sockaddr );
 
+	// on crée notre buffer pour stocker le paquet reçu
 	int taille_buffer = TAILLE_MESSAGE+TAILLE_ADRESSE_SOURCE+TAILLE_ADRESSE_DESTINATAIRE+TAILLE_ETAT_TRAME;
-
 	char buffer[taille_buffer];
 
-	// typedef struct
+
+	// On crée notre file de messages à envoyer et on ajoute les messages voulus
     SList* Lmessages = CreateList();
 
     Message* message = (Message*) malloc(sizeof(Message));
@@ -89,6 +101,7 @@ int main() {
 	AddElementBegin(Lmessages, message);
 
 
+	// On met à jour les Sockets
 	sock_S = socket(PF_INET, SOCK_DGRAM, 0);
 	sock_C = socket(PF_INET, SOCK_DGRAM, 0);
 
@@ -102,32 +115,38 @@ int main() {
 	sa_S.sin_addr.s_addr = inet_addr( IP_addr_S );
 	sa_S.sin_port        = htons( UDP_port_OUT );
 
+	// On bind
 	bind(sock_S, (struct sockaddr *) &sa_C, sizeof(struct sockaddr));
 
+	// On alloue le struct paquet
 	Paquet* paquet = (Paquet*) malloc(sizeof(Paquet));
 
+	// On crée le premier token de l'anneau (car PC1)
 	sendto(sock_C, "0000", taille_buffer * sizeof(char), 0, (struct sockaddr*) &sa_S, taille_sa);
 
 	while(1)
 	{
 		memset (buffer, '\0', sizeof(buffer));
 
+		// On reçoit le paquet brut (string) du PC précédent
 		recvfrom(sock_S, buffer, taille_buffer * sizeof(char), 0, (struct sockaddr *) &sa_C, &taille_sa);
 		
-		/* affichage */
-		// printf("%s \n", buffer);
-		sscanf(buffer, filter, paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+		// On sépare le paquet brut pour le stocker dans notre struct paquet
+		sscanf(buffer, FILTER, paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 
+		// On traite le paquet
 		traiter_trame(paquet, Lmessages);
 
+		// On retransforme le struct paquet en paquet brut
 		sprintf(buffer, "%s%s%s%s", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+		// On attend un peu pour pouvoir suivre le déroulement 
 		sleep(2);
 
-		/* re-emission datagramme vers client */
+		// On renvoit le paquet brut vers le PC suivant
 		sendto(sock_C, buffer, taille_buffer * sizeof(char), 0, (struct sockaddr*) &sa_S, taille_sa);
 	}
 
-	/* fin */
+	// On libère notre file et on ferme nos sockets
 	free(Lmessages);
 	close(sock_S);
 	close(sock_C);

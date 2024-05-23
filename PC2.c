@@ -18,6 +18,7 @@
 #define TAILLE_MESSAGE 250
 // 1 = message, 0 = token
 #define ADRESSE "2"
+#define FILTER "%1s%1s%1s%250[^\n]"
 
 typedef struct paquet
 {
@@ -61,8 +62,6 @@ void traiter_trame(Paquet* paquet, SList* Lmessages) {
 }
 
 int main() {
-	char filter[] = "%1s%1s%1s%250[^\n]";
-
 	int sock_S, sock_C;
 
 	struct sockaddr_in sa_S, sa_C;
@@ -108,7 +107,7 @@ int main() {
 		
 		/* affichage */
 		// printf("%s \n", buffer);
-		sscanf(buffer, filter, paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+		sscanf(buffer, FILTER, paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 
 		traiter_trame(paquet, Lmessages);
 
