@@ -31,7 +31,7 @@ typedef struct paquet
 // Fonction de traitement des paquet reçus
 void traiter_trame(Paquet* paquet, SList* Lmessages) {
 	// Affichage de Debug
-	printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
+	// printf("\nPaquet received : \n - Etat trame : %s\n - Source : %s\n - Destinataire : %s\n - Contenu : %s\n\n", paquet->etat_trame, paquet->source, paquet->destinataire, paquet->message);
 	printf("Paquet reçu\n");
 
 	// Si le paquet est un message de broadcast
